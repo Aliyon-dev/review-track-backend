@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+enum Role {
+  APPLICANT
+  REVIEWER
+  ADMIN
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(APPLICANT)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+
+  applications Application[] @relation("ApplicantApplications")
+  reviews      Review[]      @relation("ReviewerReviews")
+
+  @@index([email])
+}
+
+model Application {
+  id          String            @id @default(cuid())
+  title       String
+  description String            @db.Text
+  status      ApplicationStatus @default(DRAFT)
+  applicantId String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+
+  applicant User     @relation("ApplicantApplications", fields: [applicantId], references: [id], onDelete: Cascade)
+  reviews   Review[] 
+}
+
+model Review {
+  id            String   @id @default(cuid())
+  comment       String   @db.Text
+  applicationId String
+  reviewerId    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+  reviewer    User        @relation("ReviewerReviews", fields: [reviewerId], references: [id])
+}
