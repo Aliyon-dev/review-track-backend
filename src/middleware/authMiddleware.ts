@@ -1,9 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import env from '../config/env';
+import { Role } from '@/models/models';
+import env from '@/config/env';
+
+export interface JwtUserPayload {
+  id: string;
+  email: string;
+  role: Role;
+}
 
 export interface AuthRequest extends Request {
-  user?: jwt.JwtPayload | string;
+  user?: JwtUserPayload;
 }
 
 export const protect = (req: AuthRequest, res: Response, next: NextFunction): void => {
@@ -16,7 +23,7 @@ export const protect = (req: AuthRequest, res: Response, next: NextFunction): vo
 
   try {
     const token = authHeader.split(' ')[1];
-    req.user = jwt.verify(token, env.jwtSecret);
+    req.user = jwt.verify(token, env.jwtSecret) as JwtUserPayload;
     next();
   } catch {
     res.status(401);
