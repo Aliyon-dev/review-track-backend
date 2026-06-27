@@ -9,7 +9,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:unit": "jest --testPathPatterns=tests/unit",
+    "test:unit": "jest --coverage --testPathPatterns=tests/unit",
     "test:integration": "jest --testPathPatterns=tests/integration",
     "test:coverage": "jest --coverage"
   },
