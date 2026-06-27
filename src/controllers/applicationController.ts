@@ -11,6 +11,7 @@ import {
   getApplicationsByApplicantId,
   updateApplicationStatus,
   ApplicationServiceError,
+  getApplicationsByStatus
 } from '@/services/applicationService';
 
 const handleError = (err: unknown, res: Response, next: NextFunction) => {
@@ -87,3 +88,14 @@ export const updateApplicationStatusController = asyncHandler(
     }
   },
 );
+
+
+export const getApplicationsByStatusController =  asyncHandler( async(req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { status } = req.query as { status: ApplicationStatus };
+  try {
+    const applications = await getApplicationsByStatus(status);
+    sendSuccess(res, applications);
+  } catch (err) {
+    handleError(err, res, next);
+  }
+});

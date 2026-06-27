@@ -7,6 +7,7 @@ import {
   getMyApplicationsController,
   getApplicationByIdController,
   updateApplicationStatusController,
+  getApplicationsByStatusController
 } from '@/controllers/applicationController';
 
 const router = Router();
@@ -16,5 +17,6 @@ router.get('/', protect, requireRole(Role.REVIEWER, Role.ADMIN), getAllApplicati
 router.get('/my', protect, requireApplicant, getMyApplicationsController);
 router.get('/:id', protect, requireRole(Role.REVIEWER, Role.ADMIN), getApplicationByIdController);
 router.patch('/:id/status', protect, requireRole(Role.REVIEWER, Role.ADMIN), updateApplicationStatusController);
+router.get('/status', protect, requireRole(Role.REVIEWER, Role.ADMIN), getApplicationsByStatusController);
 
 export default router;

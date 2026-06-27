@@ -71,3 +71,13 @@ export const getApplicationsByApplicantId  =  async (applicantId: string): Promi
 
   return applications as Application[];
 }   
+
+
+
+export const getApplicationsByStatus = async (status: ApplicationStatus): Promise<Application[]> => {
+  const applications = await prisma.application.findMany({
+    where: { status },
+  });
+
+  return applications as Application[];
+}
