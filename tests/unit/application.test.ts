@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
@@ -10,6 +11,10 @@ jest.mock('@/lib/prisma', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    auditLog: {
+      create: jest.fn(),
+    },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -37,7 +42,10 @@ const mockFindMany = () => prisma.application.findMany as jest.Mock;
 const mockFindUnique = () => prisma.application.findUnique as jest.Mock;
 const mockUpdate = () => prisma.application.update as jest.Mock;
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  (prisma.$transaction as jest.Mock).mockImplementation((fn) => fn(prisma));
+});
 
 describe('POST /api/applications', () => {
   it('returns 401 without a token', async () => {

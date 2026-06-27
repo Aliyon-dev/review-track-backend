@@ -80,7 +80,7 @@ export const updateApplicationStatusController = asyncHandler(
         res.status(422);
         return next(new Error(`Invalid transition: ${application.status} → ${status}`));
       }
-      const updated = await updateApplicationStatus(req.params.id as string, status);
+      const updated = await updateApplicationStatus(req.params.id as string, application.status, status, req.user!.id);
       sendSuccess(res, updated);
     } catch (err) {
       handleError(err, res, next);

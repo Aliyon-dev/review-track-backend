@@ -1,3 +1,20 @@
+const bearerAuth = { bearerAuth: [] };
+
+const errorResponses = {
+  401: {
+    description: 'Unauthorized',
+    content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+  },
+  403: {
+    description: 'Forbidden',
+    content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+  },
+  422: {
+    description: 'Validation / transition error',
+    content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+  },
+};
+
 const openApiSpec = {
   openapi: '3.0.3',
   info: {
@@ -17,13 +34,6 @@ const openApiSpec = {
       },
     },
     schemas: {
-      SuccessResponse: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: true },
-          data: { type: 'object' },
-        },
-      },
       ErrorResponse: {
         type: 'object',
         properties: {
@@ -41,6 +51,22 @@ const openApiSpec = {
           role: { type: 'string', enum: ['APPLICANT', 'REVIEWER', 'ADMIN'], example: 'APPLICANT' },
         },
       },
+      Application: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: 'clx1abc123' },
+          title: { type: 'string', example: 'Software Engineer Application' },
+          description: { type: 'string', example: 'I have 5 years of experience...' },
+          status: {
+            type: 'string',
+            enum: ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED'],
+            example: 'DRAFT',
+          },
+          applicantId: { type: 'string', example: 'clx1abc123' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
     },
   },
   paths: {
@@ -48,7 +74,7 @@ const openApiSpec = {
       get: {
         tags: ['Health'],
         summary: 'Health check',
-        description: 'Returns a 200 when the API is reachable.',
+        description: 'Returns 200 when the API is reachable.',
         responses: {
           200: {
             description: 'API is running',
@@ -67,11 +93,12 @@ const openApiSpec = {
         },
       },
     },
+
     '/api/auth/login': {
       post: {
         tags: ['Auth'],
         summary: 'Login',
-        description: 'Authenticates a user and returns a JWT token.',
+        description: 'Authenticates a user and returns a JWT.',
         requestBody: {
           required: true,
           content: {
@@ -108,22 +135,188 @@ const openApiSpec = {
               },
             },
           },
-          401: {
-            description: 'Invalid credentials',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+          401: errorResponses[401],
+          422: errorResponses[422],
+        },
+      },
+    },
+
+    '/api/applications': {
+      post: {
+        tags: ['Applications'],
+        summary: 'Create application',
+        description: 'Creates a new application in DRAFT status. Requires APPLICANT role.',
+        security: [bearerAuth],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'description'],
+                properties: {
+                  title: { type: 'string', example: 'Software Engineer Application' },
+                  description: { type: 'string', example: 'I have 5 years of experience...' },
+                },
               },
             },
           },
-          422: {
-            description: 'Validation error',
+        },
+        responses: {
+          201: {
+            description: 'Application created',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
               },
             },
           },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+      get: {
+        tags: ['Applications'],
+        summary: 'List all applications',
+        description: 'Returns all applications. Requires REVIEWER or ADMIN role.',
+        security: [bearerAuth],
+        responses: {
+          200: {
+            description: 'List of applications',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/Application' } },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+    },
+
+    '/api/applications/my': {
+      get: {
+        tags: ['Applications'],
+        summary: 'My applications',
+        description: "Returns the authenticated applicant's own applications. Requires APPLICANT role.",
+        security: [bearerAuth],
+        responses: {
+          200: {
+            description: 'List of own applications',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/Application' } },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+    },
+
+    '/api/applications/{id}': {
+      get: {
+        tags: ['Applications'],
+        summary: 'Get application by ID',
+        description: 'Returns a single application. Requires REVIEWER or ADMIN role.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Application found',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+        },
+      },
+    },
+
+    '/api/applications/{id}/status': {
+      patch: {
+        tags: ['Applications'],
+        summary: 'Update application status',
+        description: 'Transitions an application to a new status. Requires REVIEWER or ADMIN role. Invalid workflow transitions are rejected with 422.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: {
+                  status: {
+                    type: 'string',
+                    enum: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'DRAFT'],
+                    example: 'UNDER_REVIEW',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Status updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
         },
       },
     },

@@ -44,15 +44,25 @@ export const getApplications =  async (): Promise<Application[]> => {
 
 export const updateApplicationStatus = async (
   id: string,
-  status: ApplicationStatus,
+  fromStatus: ApplicationStatus,
+  toStatus: ApplicationStatus,
+  changedBy: string,
 ): Promise<Application> => {
-  const application = await prisma.application.update({
-    where: { id },
-    data: { status },
+  const application = await prisma.$transaction(async (tx) => {
+    const updated = await tx.application.update({
+      where: { id },
+      data: { status: toStatus },
+    });
+
+    await tx.auditLog.create({
+      data: { applicationId: id, changedBy, fromStatus, toStatus },
+    });
+
+    return updated;
   });
 
   return application as Application;
-}
+};
 
 export const getApplicationsByApplicantId  =  async (applicantId: string): Promise<Application[]> => {
   const applications = await prisma.application.findMany({

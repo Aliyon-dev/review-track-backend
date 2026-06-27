@@ -43,3 +43,12 @@ export interface Review {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface AuditLog {
+  id: string;
+  applicationId: string;
+  changedBy: string;
+  fromStatus: ApplicationStatus;
+  toStatus: ApplicationStatus;
+  createdAt: Date;
+}
