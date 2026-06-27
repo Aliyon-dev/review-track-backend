@@ -15,8 +15,8 @@ const router = Router();
 router.post('/', protect, requireApplicant, createApplicationController);
 router.get('/', protect, requireRole(Role.REVIEWER, Role.ADMIN), getAllApplicationsController);
 router.get('/my', protect, requireApplicant, getMyApplicationsController);
+router.get('/status', protect, requireRole(Role.REVIEWER, Role.ADMIN), getApplicationsByStatusController);
 router.get('/:id', protect, requireRole(Role.REVIEWER, Role.ADMIN), getApplicationByIdController);
 router.patch('/:id/status', protect, requireRole(Role.REVIEWER, Role.ADMIN), updateApplicationStatusController);
-router.get('/status', protect, requireRole(Role.REVIEWER, Role.ADMIN), getApplicationsByStatusController);
 
 export default router;
