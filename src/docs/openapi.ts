@@ -6,7 +6,7 @@ const openApiSpec = {
     description: 'Backend API for the Review Track application.',
   },
   servers: [
-    { url: 'http://localhost:3000', description: 'Local development' },
+    { url: 'http://localhost:8000', description: 'Local development' },
   ],
   components: {
     securitySchemes: {

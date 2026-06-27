@@ -23,14 +23,13 @@ app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 
 app.get('/api/docs/openapi.json', (_req, res) => res.json(openApiSpec));
-// Scalar injects an inline script — override helmet's CSP for this route only
 app.get('/api/docs', (_req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src * data:; connect-src *",
   );
   next();
-}, apiReference({ url: '/api/docs/openapi.json' }));
+}, apiReference({ content: openApiSpec }));
 
 app.use(notFound);
 app.use(errorHandler);
