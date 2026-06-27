@@ -1,0 +1,1 @@
+{"version":3,"file":"responseHelper.d.ts","sourceRoot":"","sources":["../../src/utils/responseHelper.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAEnC,eAAO,MAAM,WAAW,GAAI,CAAC,EAAE,KAAK,QAAQ,EAAE,MAAM,CAAC,EAAE,mBAAgB,KAAG,IAEzE,CAAC;AAEF,eAAO,MAAM,SAAS,GAAI,KAAK,QAAQ,EAAE,SAAS,MAAM,EAAE,mBAAgB,KAAG,IAE5E,CAAC"}
