@@ -13,6 +13,19 @@ export interface AuthRequest extends Request {
   user?: JwtUserPayload;
 }
 
+export const requireRole = (...roles: Role[]) =>
+  (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      res.status(403);
+      return next(new Error('Forbidden'));
+    }
+    next();
+  };
+
+export const requireApplicant = requireRole(Role.APPLICANT);
+export const requireReviewer = requireRole(Role.REVIEWER);
+export const requireAdmin = requireRole(Role.ADMIN);
+
 export const protect = (req: AuthRequest, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
 
