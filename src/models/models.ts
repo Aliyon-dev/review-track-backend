@@ -31,8 +31,27 @@ export interface Application {
   description: string;
   status: ApplicationStatus;
   applicantId: string;
+  applicant?: { firstName: string; lastName: string };
+  type?: string | null;
+  priority?: string | null;
+  amount?: number | null;
+  justification?: string | null;
+  submittedAt?: Date | null;
   createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface ActivityEvent {
+  type: 'STATUS_CHANGE' | 'COMMENT';
+  id: string;
+  createdAt: Date;
+  fromStatus?: ApplicationStatus;
+  toStatus?: ApplicationStatus;
+  changedBy?: string;
+  changedByName?: string;
+  comment?: string;
+  reviewerId?: string;
+  reviewerName?: string;
 }
 
 export interface Review {

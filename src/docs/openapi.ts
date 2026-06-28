@@ -63,8 +63,35 @@ const openApiSpec = {
             example: 'DRAFT',
           },
           applicantId: { type: 'string', example: 'clx1abc123' },
+          applicant: {
+            type: 'object',
+            properties: {
+              firstName: { type: 'string', example: 'Jane' },
+              lastName: { type: 'string', example: 'Doe' },
+            },
+          },
+          type: { type: 'string', nullable: true, example: 'GRANT' },
+          priority: { type: 'string', nullable: true, example: 'HIGH' },
+          amount: { type: 'number', nullable: true, example: 50000 },
+          justification: { type: 'string', nullable: true, example: 'Required for project funding...' },
+          submittedAt: { type: 'string', format: 'date-time', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      ActivityEvent: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['STATUS_CHANGE', 'COMMENT'] },
+          id: { type: 'string', example: 'clx1abc123' },
+          createdAt: { type: 'string', format: 'date-time' },
+          fromStatus: { type: 'string', nullable: true },
+          toStatus: { type: 'string', nullable: true },
+          changedBy: { type: 'string', nullable: true },
+          changedByName: { type: 'string', nullable: true, example: 'Jane Doe' },
+          comment: { type: 'string', nullable: true },
+          reviewerId: { type: 'string', nullable: true },
+          reviewerName: { type: 'string', nullable: true, example: 'John Smith' },
         },
       },
     },
@@ -141,6 +168,65 @@ const openApiSpec = {
       },
     },
 
+    '/api/auth/me': {
+      get: {
+        tags: ['Auth'],
+        summary: 'Get current user',
+        description: 'Returns the authenticated user\'s profile.',
+        security: [bearerAuth],
+        responses: {
+          200: {
+            description: 'User profile',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/User' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          404: {
+            description: 'User not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+        },
+      },
+    },
+
+    '/api/auth/logout': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Logout',
+        description: 'Semantic logout endpoint. JWT is stateless — client must discard the token.',
+        security: [bearerAuth],
+        responses: {
+          200: {
+            description: 'Logged out',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: { message: { type: 'string', example: 'Logged out' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+        },
+      },
+    },
+
     '/api/applications': {
       post: {
         tags: ['Applications'],
@@ -157,6 +243,10 @@ const openApiSpec = {
                 properties: {
                   title: { type: 'string', example: 'Software Engineer Application' },
                   description: { type: 'string', example: 'I have 5 years of experience...' },
+                  type: { type: 'string', example: 'GRANT' },
+                  priority: { type: 'string', example: 'HIGH' },
+                  amount: { type: 'number', example: 50000 },
+                  justification: { type: 'string', example: 'Required for project funding...' },
                 },
               },
             },
@@ -238,7 +328,7 @@ const openApiSpec = {
       get: {
         tags: ['Applications'],
         summary: 'Get application by ID',
-        description: 'Returns a single application. Requires REVIEWER or ADMIN role.',
+        description: 'Returns a single application. REVIEWER/ADMIN can fetch any; APPLICANT can only fetch their own.',
         security: [bearerAuth],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
@@ -264,6 +354,394 @@ const openApiSpec = {
             description: 'Application not found',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
           },
+        },
+      },
+      patch: {
+        tags: ['Applications'],
+        summary: 'Update application',
+        description: 'Updates a DRAFT or CHANGES_REQUESTED application. Requires APPLICANT role and ownership.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string', example: 'Updated Title' },
+                  description: { type: 'string', example: 'Updated description...' },
+                  type: { type: 'string', example: 'GRANT' },
+                  priority: { type: 'string', example: 'MEDIUM' },
+                  amount: { type: 'number', example: 25000 },
+                  justification: { type: 'string', example: 'Updated justification...' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Application updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
+        },
+      },
+      delete: {
+        tags: ['Applications'],
+        summary: 'Delete application',
+        description: 'Soft-deletes a DRAFT application. Requires APPLICANT role and ownership.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          204: { description: 'Application deleted' },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
+        },
+      },
+    },
+
+    '/api/applications/{id}/comments': {
+      post: {
+        tags: ['Reviews'],
+        summary: 'Add comment',
+        description: 'Adds a comment to an application. Requires REVIEWER or ADMIN role.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['comment'],
+                properties: {
+                  comment: { type: 'string', example: 'Please provide more details about your experience.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Comment added',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        comment: { type: 'string' },
+                        applicationId: { type: 'string' },
+                        reviewerId: { type: 'string' },
+                        createdAt: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          422: errorResponses[422],
+        },
+      },
+    },
+
+    '/api/applications/{id}/events': {
+      get: {
+        tags: ['Reviews'],
+        summary: 'Activity timeline',
+        description: 'Returns the merged activity timeline (status changes + comments) for an application, sorted by date.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Activity events',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/ActivityEvent' } },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+        },
+      },
+    },
+
+    '/api/applications/{id}/submit': {
+      patch: {
+        tags: ['Applications'],
+        summary: 'Submit application',
+        description: 'Submits an application for review, transitioning it from DRAFT to SUBMITTED. Requires APPLICANT role and ownership of the application.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Application submitted',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
+        },
+      },
+    },
+
+    '/api/reviewer/applications': {
+      get: {
+        tags: ['Reviewer'],
+        summary: 'List all applications',
+        description: 'Returns all applications. Requires REVIEWER role.',
+        security: [bearerAuth],
+        responses: {
+          200: {
+            description: 'List of applications',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { type: 'array', items: { $ref: '#/components/schemas/Application' } },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+    },
+
+    '/api/reviewer/applications/{id}': {
+      get: {
+        tags: ['Reviewer'],
+        summary: 'Get application by ID',
+        description: 'Returns a single application. Requires REVIEWER role.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Application found',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+        },
+      },
+    },
+
+    '/api/reviewer/applications/{id}/start-review': {
+      post: {
+        tags: ['Reviewer'],
+        summary: 'Start review',
+        description: 'Transitions the application from SUBMITTED to UNDER_REVIEW. Requires REVIEWER role.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Review started',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
+        },
+      },
+    },
+
+    '/api/reviewer/applications/{id}/approve': {
+      post: {
+        tags: ['Reviewer'],
+        summary: 'Approve application',
+        description: 'Transitions the application from UNDER_REVIEW to APPROVED. Requires REVIEWER role.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Application approved',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
+        },
+      },
+    },
+
+    '/api/reviewer/applications/{id}/reject': {
+      post: {
+        tags: ['Reviewer'],
+        summary: 'Reject application',
+        description: 'Transitions the application from UNDER_REVIEW to REJECTED. Requires REVIEWER role.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Application rejected',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
+        },
+      },
+    },
+
+    '/api/reviewer/applications/{id}/return': {
+      post: {
+        tags: ['Reviewer'],
+        summary: 'Return application',
+        description: 'Transitions the application to CHANGES_REQUESTED. Requires REVIEWER role.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Application returned for changes',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
         },
       },
     },
