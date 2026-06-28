@@ -8,6 +8,7 @@ import { notFound, errorHandler } from '@/middleware/errorMiddleware';
 import healthRouter from '@/routes/healthRoutes';
 import authRouter from '@/routes/authRoutes';
 import applicationRouter from '@/routes/applicationRoutes';
+import reviewerRouter from '@/routes/reviewerRoutes';
 import openApiSpec from '@/docs/openapi';
 
 const app = express();
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/applications', applicationRouter);
+app.use('/api/reviewer', reviewerRouter);
 
 app.get('/api/docs/openapi.json', (_req, res) => res.json(openApiSpec));
 app.get('/api/docs', (_req, res, next) => {

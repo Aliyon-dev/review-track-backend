@@ -268,6 +268,41 @@ const openApiSpec = {
       },
     },
 
+    '/api/applications/{id}/submit': {
+      patch: {
+        tags: ['Applications'],
+        summary: 'Submit application',
+        description: 'Submits an application for review, transitioning it from DRAFT to SUBMITTED. Requires APPLICANT role and ownership of the application.',
+        security: [bearerAuth],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, example: 'clx1abc123' },
+        ],
+        responses: {
+          200: {
+            description: 'Application submitted',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/Application' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: {
+            description: 'Application not found',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          422: errorResponses[422],
+        },
+      },
+    },
+
     '/api/applications/{id}/status': {
       patch: {
         tags: ['Applications'],

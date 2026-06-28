@@ -90,7 +90,7 @@ export const updateApplicationStatusController = asyncHandler(
 );
 
 
-export const getApplicationsByStatusController =  asyncHandler( async(req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getApplicationsByStatusController = asyncHandler(async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { status } = req.query as { status: ApplicationStatus };
   try {
     const applications = await getApplicationsByStatus(status);
@@ -99,3 +99,32 @@ export const getApplicationsByStatusController =  asyncHandler( async(req: AuthR
     handleError(err, res, next);
   }
 });
+
+export const submitApplicationController = asyncHandler(
+  async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const application = await getApplicationById(req.params.id as string);
+      if (!application) {
+        res.status(404);
+        return next(new Error('Application not found'));
+      }
+      if (application.applicantId !== req.user!.id) {
+        res.status(403);
+        return next(new Error('Forbidden'));
+      }
+      if (!canTransition(application.status, ApplicationStatus.SUBMITTED)) {
+        res.status(422);
+        return next(new Error(`Cannot submit application with status: ${application.status}`));
+      }
+      const updated = await updateApplicationStatus(
+        req.params.id as string,
+        application.status,
+        ApplicationStatus.SUBMITTED,
+        req.user!.id,
+      );
+      sendSuccess(res, updated);
+    } catch (err) {
+      handleError(err, res, next);
+    }
+  },
+);
