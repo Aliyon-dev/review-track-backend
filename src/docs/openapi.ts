@@ -1,3 +1,5 @@
+import env from '@/config/env';
+
 const bearerAuth = { bearerAuth: [] };
 
 const errorResponses = {
@@ -23,7 +25,7 @@ const openApiSpec = {
     description: 'Backend API for the Review Track application.',
   },
   servers: [
-    { url: 'http://localhost:8000', description: 'Local development' },
+    { url: env.apiUrl, description: 'API server' },
   ],
   components: {
     securitySchemes: {
