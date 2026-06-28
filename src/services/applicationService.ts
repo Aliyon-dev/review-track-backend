@@ -1,4 +1,5 @@
 import { Application, ApplicationStatus } from '@/models/models';
+import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 
 export class ApplicationServiceError extends Error {
@@ -48,7 +49,7 @@ export const updateApplicationStatus = async (
   toStatus: ApplicationStatus,
   changedBy: string,
 ): Promise<Application> => {
-  const application = await prisma.$transaction(async (tx) => {
+  const application = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const updated = await tx.application.update({
       where: { id },
       data: { status: toStatus },
