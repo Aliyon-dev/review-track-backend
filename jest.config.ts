@@ -10,6 +10,7 @@ const config: Config = {
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^@scalar/express-api-reference$': '<rootDir>/tests/__mocks__/scalar.ts',
   },
 };
 

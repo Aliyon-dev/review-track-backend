@@ -41,6 +41,7 @@ model User {
 
   applications Application[] @relation("ApplicantApplications")
   reviews      Review[]      @relation("ReviewerReviews")
+  auditLogs    AuditLog[]    @relation("AuditLogChanger")
 
   @@index([email])
 }
@@ -55,8 +56,9 @@ model Application {
   updatedAt   DateTime          @updatedAt
   deletedAt   DateTime?
 
-  applicant User     @relation("ApplicantApplications", fields: [applicantId], references: [id], onDelete: Cascade)
-  reviews   Review[] 
+  applicant User       @relation("ApplicantApplications", fields: [applicantId], references: [id], onDelete: Cascade)
+  reviews   Review[]
+  auditLogs AuditLog[]
 }
 
 model Review {
@@ -69,4 +71,16 @@ model Review {
 
   application Application @relation(fields: [applicationId], references: [id])
   reviewer    User        @relation("ReviewerReviews", fields: [reviewerId], references: [id])
+}
+
+model AuditLog {
+  id            String            @id @default(cuid())
+  applicationId String
+  changedBy     String
+  fromStatus    ApplicationStatus
+  toStatus      ApplicationStatus
+  createdAt     DateTime          @default(now())
+
+  application   Application @relation(fields: [applicationId], references: [id])
+  changedByUser User        @relation("AuditLogChanger", fields: [changedBy], references: [id])
 }

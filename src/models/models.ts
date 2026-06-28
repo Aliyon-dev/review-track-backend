@@ -32,7 +32,7 @@ export interface Application {
   status: ApplicationStatus;
   applicantId: string;
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt?: Date;
 }
 
 export interface Review {
@@ -42,4 +42,13 @@ export interface Review {
   reviewerId: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AuditLog {
+  id: string;
+  applicationId: string;
+  changedBy: string;
+  fromStatus: ApplicationStatus;
+  toStatus: ApplicationStatus;
+  createdAt: Date;
 }

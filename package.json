@@ -8,10 +8,10 @@
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "jest --forceExit",
-    "test:unit": "jest --testPathPatterns=tests/unit --forceExit",
-    "test:integration": "jest --testPathPatterns=tests/integration --forceExit",
-    "test:coverage": "jest --coverage --forceExit"
+    "test": "jest",
+    "test:unit": "jest --coverage --testPathPatterns=tests/unit",
+    "test:integration": "jest --testPathPatterns=tests/integration",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [],
   "author": "",
