@@ -27,6 +27,30 @@ export class AuthError extends Error {
   }
 }
 
+export interface MeResult {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: Role;
+  createdAt: Date;
+}
+
+export const getMe = async (userId: string): Promise<MeResult> => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+
+  if (!user) throw new AuthError('User not found', 404);
+
+  return {
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    role: user.role as Role,
+    createdAt: user.createdAt,
+  };
+};
+
 export const loginUser = async (
   email: string,
   password: string,

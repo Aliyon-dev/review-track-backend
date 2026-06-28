@@ -132,15 +132,18 @@ describe('GET /api/applications/my', () => {
       .set('Authorization', token(Role.APPLICANT, 'user-1'));
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
-    expect(prisma.application.findMany).toHaveBeenCalledWith({ where: { applicantId: 'user-1' } });
+    expect(prisma.application.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { applicantId: 'user-1' } }),
+    );
   });
 });
 
 describe('GET /api/applications/:id', () => {
-  it('returns 403 for APPLICANT', async () => {
+  it('returns 403 for APPLICANT accessing another user\'s application', async () => {
+    mockFindUnique().mockResolvedValue({ ...draftApp, applicantId: 'other-user' });
     const res = await request(app)
       .get('/api/applications/app-1')
-      .set('Authorization', token(Role.APPLICANT));
+      .set('Authorization', token(Role.APPLICANT, 'user-1'));
     expect(res.status).toBe(403);
   });
 
