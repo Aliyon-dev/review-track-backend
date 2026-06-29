@@ -1,6 +1,7 @@
 import { Application, ApplicationStatus } from '@/models/models';
 import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
+import { notifyStatusChange } from '@/services/notificationService';
 
 export class ApplicationServiceError extends Error {
   constructor(
@@ -42,8 +43,8 @@ export const createApplication = async (
 };
 
 export const getApplicationById = async (id: string): Promise<Application | null> => {
-  const application = await prisma.application.findUnique({
-    where: { id },
+  const application = await prisma.application.findFirst({
+    where: { id, deletedAt: null },
     include: applicantSelect,
   });
 
@@ -52,6 +53,7 @@ export const getApplicationById = async (id: string): Promise<Application | null
 
 export const getApplications = async (): Promise<Application[]> => {
   const applications = await prisma.application.findMany({
+    where: { deletedAt: null },
     include: applicantSelect,
   });
   return applications as Application[];
@@ -80,12 +82,14 @@ export const updateApplicationStatus = async (
     return updated;
   });
 
+  void notifyStatusChange(application.applicantId, application.title, toStatus).catch(console.error);
+
   return application as Application;
 };
 
 export const getApplicationsByApplicantId = async (applicantId: string): Promise<Application[]> => {
   const applications = await prisma.application.findMany({
-    where: { applicantId },
+    where: { applicantId, deletedAt: null },
     include: applicantSelect,
   });
 
@@ -94,7 +98,7 @@ export const getApplicationsByApplicantId = async (applicantId: string): Promise
 
 export const getApplicationsByStatus = async (status: ApplicationStatus): Promise<Application[]> => {
   const applications = await prisma.application.findMany({
-    where: { status },
+    where: { status, deletedAt: null },
     include: applicantSelect,
   });
 
@@ -106,7 +110,7 @@ export const updateApplication = async (
   data: Partial<ApplicationInput>,
   changedById: string,
 ): Promise<Application> => {
-  const application = await prisma.application.findUnique({ where: { id } });
+  const application = await prisma.application.findFirst({ where: { id, deletedAt: null } });
 
   if (!application) throw new ApplicationServiceError('Application not found', 404);
   if (application.applicantId !== changedById) throw new ApplicationServiceError('Forbidden', 403);
@@ -120,9 +124,16 @@ export const updateApplication = async (
     );
   }
 
+  const { title, description, type, priority, amount, justification } = data;
+  const safeData = Object.fromEntries(
+    Object.entries({ title, description, type, priority, amount, justification }).filter(
+      ([, v]) => v !== undefined,
+    ),
+  );
+
   const updated = await prisma.application.update({
     where: { id },
-    data,
+    data: safeData,
     include: applicantSelect,
   });
 
@@ -130,7 +141,7 @@ export const updateApplication = async (
 };
 
 export const deleteApplication = async (id: string, changedById: string): Promise<void> => {
-  const application = await prisma.application.findUnique({ where: { id } });
+  const application = await prisma.application.findFirst({ where: { id, deletedAt: null } });
 
   if (!application) throw new ApplicationServiceError('Application not found', 404);
   if (application.applicantId !== changedById) throw new ApplicationServiceError('Forbidden', 403);

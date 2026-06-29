@@ -12,7 +12,9 @@ REST API for a multi-role application review platform. Applicants submit request
 - [Environment Variables](#environment-variables)
 - [Database Design](#database-design)
 - [API Overview](#api-overview)
+- [Middleware](#middleware)
 - [Workflow Explanation](#workflow-explanation)
+- [Email Notifications](#email-notifications)
 - [Trade-offs](#trade-offs)
 - [AI Usage](#ai-usage)
 - [Future Improvements](#future-improvements)
@@ -24,7 +26,7 @@ REST API for a multi-role application review platform. Applicants submit request
 **Prerequisites:** Node.js 22+, Docker
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Aliyon-dev/review-track-backend
 cd review-track-backend
 npm install
 ```
@@ -99,6 +101,11 @@ Interactive API docs (Scalar) are at `http://localhost:8000/api/docs`.
 | `PORT` | No | `3000` | Port the server listens on |
 | `API_URL` | No | `http://localhost:<PORT>` | Base URL shown in the API docs |
 | `NODE_ENV` | No | `development` | `development` or `production` |
+| `SMTP_HOST` | No | `smtp.gmail.com` | SMTP server hostname |
+| `SMTP_PORT` | No | `587` | SMTP port (587 = STARTTLS, 465 = SSL) |
+| `SMTP_USER` | No | — | SMTP login username. Email notifications are skipped when not set. |
+| `SMTP_PASS` | No | — | SMTP password or app-specific password |
+| `FROM_EMAIL` | No | `notifications@yourdomain.com` | Sender address shown in the `From` header |
 
 **Local DATABASE_URL:**
 ```
@@ -176,6 +183,27 @@ Full interactive docs at `/api/docs`. Summary:
 
 ---
 
+## Middleware
+
+The request pipeline uses five middleware layers, applied in this order:
+
+### `protect` — JWT authentication
+Reads the `Authorization: Bearer <token>` header, verifies the JWT signature using `JWT_SECRET`, and attaches the decoded payload (`id`, `email`, `role`) to `req.user`. Returns `401` if the header is missing or the token is invalid. All protected routes use this middleware.
+
+### `requireRole` / `requireApplicant` / `requireReviewer`
+Checks that `req.user.role` matches one of the permitted roles. Returns `403` if the role is not allowed. Pre-built shorthands (`requireApplicant`, `requireReviewer`) wrap the generic `requireRole` factory. Applied after `protect` on role-restricted routes.
+
+### `validate`
+Runs `validationResult` from `express-validator` after a chain of field validators has been attached to a route. If any validator fails it collects all error messages, sets the status to `422`, and forwards a single joined error to the error handler. Used on `POST /login` and any route with a request body schema.
+
+### `notFound`
+Catch-all registered after all routes. Sets the status to `404` and forwards an error message containing the requested URL. Ensures unmatched paths return a consistent JSON error rather than an Express default HTML page.
+
+### `errorHandler`
+Global Express error handler (four-argument signature). Normalizes the status code — if `res.statusCode` is still `200` when an error reaches this handler it defaults to `500`. Responds with `{ success: false, message }`. In `development` mode it also includes the stack trace.
+
+---
+
 ## Workflow Explanation
 
 Applications move through a strict state machine. Invalid transitions are rejected with `422`.
@@ -199,6 +227,63 @@ CHANGES_REQUESTED ◄────────── UNDER_REVIEW ──► APPRO
 | UNDER_REVIEW | CHANGES_REQUESTED | Reviewer (return) |
 | CHANGES_REQUESTED | DRAFT | Applicant (edit unlocks draft) |
 
+### How transitions are enforced
+
+The allowed moves are declared as a single lookup table in `src/services/workflow.ts`:
+
+```ts
+const transitions: Record<ApplicationStatus, ApplicationStatus[]> = {
+  DRAFT:              [SUBMITTED],
+  SUBMITTED:          [UNDER_REVIEW, CHANGES_REQUESTED],
+  CHANGES_REQUESTED:  [DRAFT, SUBMITTED],
+  UNDER_REVIEW:       [APPROVED, REJECTED, CHANGES_REQUESTED, DRAFT],
+  APPROVED:           [],
+  REJECTED:           [],
+};
+```
+
+`canTransition(fromStatus, toStatus)` does a single array-inclusion check against this table. Both `applicationController.ts` (applicant-facing actions) and `reviewerController.ts` (reviewer-facing actions) call it before delegating to the service layer. If the check fails the controller returns `422` immediately, so the database is never touched.
+
+Once `canTransition` passes, `updateApplicationStatus` in `src/services/applicationService.ts` writes the new status and an `AuditLog` row in a **single Prisma transaction**, guaranteeing the history is always consistent with the current state.
+
+---
+
+## Email Notifications
+
+Status change emails are sent via **Nodemailer** (`src/services/notificationService.ts`). Notifications are fire-and-forget — they run after the database transaction commits and never block or fail the API response.
+
+### When emails are sent
+
+An email is sent for four status transitions:
+
+| Status | Subject |
+|--------|---------|
+| `UNDER_REVIEW` | Your application is under review |
+| `APPROVED` | Your application has been approved |
+| `REJECTED` | Your application has been rejected |
+| `CHANGES_REQUESTED` | Changes requested on your application |
+
+`DRAFT` and `SUBMITTED` transitions do not trigger an email.
+
+### Template
+
+HTML templates are built in `src/utils/emailTemplates.ts`. `buildStatusEmail(firstName, applicationTitle, status)` returns both an `html` body and a plain-text `text` fallback. The HTML uses a table-based layout with inline styles for broad email client compatibility. Each status is represented by a colored badge pill:
+
+| Status | Color |
+|--------|-------|
+| UNDER_REVIEW | Green |
+| APPROVED | Green |
+| REJECTED | Red |
+| CHANGES_REQUESTED | Warm brown |
+
+User-supplied content (application title) is HTML-escaped before interpolation to prevent injection.
+
+### Configuration
+
+Set the four SMTP variables in `.env`. Emails are silently skipped when `SMTP_USER` is not set, so the service works in development without any mail configuration.
+
+For Gmail, generate an [App Password](https://myaccount.google.com/apppasswords) (requires 2-step verification) and use it as `SMTP_PASS`.
+
 ---
 
 ## Trade-offs
@@ -213,14 +298,15 @@ CHANGES_REQUESTED ◄────────── UNDER_REVIEW ──► APPRO
 
 **No pagination** — `GET /api/applications` returns all records. Acceptable for a small dataset; needs cursor or offset pagination before scaling.
 
+**422 over 403 for invalid state transitions** — the requirements spec suggested 403 (Forbidden) when a transition is not permitted (e.g. `DRAFT → APPROVED`). 422 (Unprocessable Entity) is more accurate: the request is authenticated and authorized — the problem is that the business logic cannot honour it. 403 implies a permission failure, which would mislead clients into thinking they lack access rather than that the payload is semantically invalid.
+
 ---
 
 ## AI Usage
 
 This project was built with AI assistance (Claude) throughout:
 
-- **Scaffolding** — initial project structure, middleware, and service patterns
-- **Endpoint implementation** — controller, service, and route boilerplate following established patterns
+
 - **OpenAPI documentation** — Scalar docs generated alongside each endpoint
 - **Test fixes** — identifying and resolving a pre-existing JWT secret mismatch in the test environment
 - **Schema evolution** — planning and writing Prisma migrations for new fields
@@ -234,7 +320,6 @@ All generated code was reviewed and the architectural decisions (state machine d
 - **Pagination** on list endpoints (cursor-based)
 - **Token blacklist** for real server-side logout
 - **File attachments** on applications (S3/object storage)
-- **Email notifications** on status transitions
 - **Admin endpoints** — user management, bulk actions, reporting
 - **Rate limiting** on auth endpoints
 - **`type` and `priority` enums** once design values are finalised
