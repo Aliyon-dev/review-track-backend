@@ -14,7 +14,6 @@ const transitions: Record<ApplicationStatus, ApplicationStatus[]> = {
     ApplicationStatus.APPROVED,
     ApplicationStatus.REJECTED,
     ApplicationStatus.CHANGES_REQUESTED,
-    ApplicationStatus.DRAFT,
   ],
 
   [ApplicationStatus.APPROVED]: [],

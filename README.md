@@ -6,18 +6,76 @@ REST API for a multi-role application review platform. Applicants submit request
 
 ## Table of Contents
 
+- [Architecture](#architecture)
+- [Folder Structure](#folder-structure)
 - [Installation](#installation)
 - [Docker Instructions](#docker-instructions)
 - [Local Setup](#local-setup)
 - [Environment Variables](#environment-variables)
 - [Database Design](#database-design)
 - [API Overview](#api-overview)
+- [HTTP Status Codes](#http-status-codes)
 - [Middleware](#middleware)
 - [Workflow Explanation](#workflow-explanation)
 - [Email Notifications](#email-notifications)
+- [Security](#security)
+- [Testing](#testing)
+- [Deployment](#deployment)
 - [Trade-offs](#trade-offs)
 - [AI Usage](#ai-usage)
 - [Future Improvements](#future-improvements)
+
+---
+
+## Architecture
+
+```
+React Frontend
+      │
+      │  HTTP / JSON
+      ▼
+Express REST API  ──────────►  Nodemailer (SMTP)
+      │
+  ┌───┴───────────┐
+  │               │
+  ▼               ▼
+Prisma ORM     JWT Auth
+  │            (jsonwebtoken)
+  ▼
+PostgreSQL
+```
+
+**Request lifecycle:**
+1. `protect` middleware verifies the JWT and attaches the user to `req.user`
+2. `requireRole` middleware enforces role-based access
+3. Controller validates the requested state transition via `canTransition`
+4. Service layer writes the status update and audit log in a single Prisma transaction
+5. Email notification fires asynchronously after the transaction commits
+
+---
+
+## Folder Structure
+
+```
+backend/
+├── src/
+│   ├── config/          # Environment variable loading (env.ts)
+│   ├── controllers/     # Request handlers — applicant, reviewer, auth, health
+│   ├── docs/            # OpenAPI spec (Scalar)
+│   ├── lib/             # Prisma client singleton
+│   ├── middleware/       # auth, role, validation, error handling
+│   ├── models/          # Shared TypeScript interfaces and enums
+│   ├── routes/          # Express router definitions
+│   ├── services/        # Business logic — applications, reviews, workflow, notifications
+│   ├── utils/           # Pure helpers — response formatting, email templates
+│   └── validators/      # express-validator chains
+├── prisma/
+│   ├── schema.prisma    # Database schema
+│   └── seed.ts          # Seed script
+└── tests/
+    ├── unit/            # Pure function and service tests
+    └── integration/     # HTTP-level endpoint tests
+```
 
 ---
 
@@ -183,6 +241,20 @@ Full interactive docs at `/api/docs`. Summary:
 
 ---
 
+## HTTP Status Codes
+
+| Code | Meaning |
+|------|---------|
+| `200` | Success |
+| `201` | Resource created |
+| `401` | Authentication required (missing or invalid token) |
+| `403` | Forbidden (authenticated but wrong role) |
+| `404` | Resource not found |
+| `422` | Validation error or illegal state transition |
+| `500` | Unexpected server error |
+
+---
+
 ## Middleware
 
 The request pipeline uses five middleware layers, applied in this order:
@@ -212,20 +284,25 @@ Applications move through a strict state machine. Invalid transitions are reject
 DRAFT ──────────────────────────────► SUBMITTED
   ▲                                       │
   │                                       ▼
-CHANGES_REQUESTED ◄────────── UNDER_REVIEW ──► APPROVED
-                                       │
-                                       └──────► REJECTED
+  └──── CHANGES_REQUESTED ◄─────── UNDER_REVIEW ──► APPROVED
+           │    ▲                         │
+           │    └── Applicant edits       └──────────► REJECTED
+           ▼
+        SUBMITTED
 ```
 
 | From | To | Who |
 |------|----|-----|
-| DRAFT | SUBMITTED | Applicant (submit) |
-| SUBMITTED | UNDER_REVIEW | Reviewer (start-review) |
-| SUBMITTED | CHANGES_REQUESTED | Reviewer (return) |
-| UNDER_REVIEW | APPROVED | Reviewer |
-| UNDER_REVIEW | REJECTED | Reviewer |
-| UNDER_REVIEW | CHANGES_REQUESTED | Reviewer (return) |
-| CHANGES_REQUESTED | DRAFT | Applicant (edit unlocks draft) |
+| `DRAFT` | `SUBMITTED` | Applicant — submit |
+| `SUBMITTED` | `UNDER_REVIEW` | Reviewer — start review |
+| `SUBMITTED` | `CHANGES_REQUESTED` | Reviewer — return before review |
+| `UNDER_REVIEW` | `APPROVED` | Reviewer |
+| `UNDER_REVIEW` | `REJECTED` | Reviewer |
+| `UNDER_REVIEW` | `CHANGES_REQUESTED` | Reviewer — return for changes |
+| `CHANGES_REQUESTED` | `DRAFT` | Applicant — editing re-opens as draft |
+| `CHANGES_REQUESTED` | `SUBMITTED` | Applicant — re-submit directly |
+
+Only reviewers can move an application into `CHANGES_REQUESTED`. Only applicants can move it out (by editing or re-submitting). This ensures reviewers cannot skip the applicant edit step by sending applications directly back to `DRAFT`.
 
 ### How transitions are enforced
 
@@ -236,7 +313,7 @@ const transitions: Record<ApplicationStatus, ApplicationStatus[]> = {
   DRAFT:              [SUBMITTED],
   SUBMITTED:          [UNDER_REVIEW, CHANGES_REQUESTED],
   CHANGES_REQUESTED:  [DRAFT, SUBMITTED],
-  UNDER_REVIEW:       [APPROVED, REJECTED, CHANGES_REQUESTED, DRAFT],
+  UNDER_REVIEW:       [APPROVED, REJECTED, CHANGES_REQUESTED],
   APPROVED:           [],
   REJECTED:           [],
 };
@@ -244,7 +321,7 @@ const transitions: Record<ApplicationStatus, ApplicationStatus[]> = {
 
 `canTransition(fromStatus, toStatus)` does a single array-inclusion check against this table. Both `applicationController.ts` (applicant-facing actions) and `reviewerController.ts` (reviewer-facing actions) call it before delegating to the service layer. If the check fails the controller returns `422` immediately, so the database is never touched.
 
-Once `canTransition` passes, `updateApplicationStatus` in `src/services/applicationService.ts` writes the new status and an `AuditLog` row in a **single Prisma transaction**, guaranteeing the history is always consistent with the current state.
+Once `canTransition` passes, `updateApplicationStatus` in `src/services/applicationService.ts` writes the new status and an `AuditLog` row in a **single Prisma `$transaction`**, guaranteeing atomicity — the audit history is always consistent with the current application state.
 
 ---
 
@@ -283,6 +360,57 @@ User-supplied content (application title) is HTML-escaped before interpolation t
 Set the four SMTP variables in `.env`. Emails are silently skipped when `SMTP_USER` is not set, so the service works in development without any mail configuration.
 
 For Gmail, generate an [App Password](https://myaccount.google.com/apppasswords) (requires 2-step verification) and use it as `SMTP_PASS`.
+
+---
+
+## Security
+
+- **Passwords** hashed with `bcrypt` before storage — plain-text passwords are never persisted
+- **JWT authentication** — stateless tokens signed with `JWT_SECRET`; all protected routes require a valid token
+- **Role-based authorization** — `requireRole` middleware enforces that only the correct role can reach each route
+- **Input validation** — `express-validator` chains validate and sanitize all user-supplied request fields before they reach business logic
+- **SQL injection protection** — all database access goes through Prisma's parameterized query builder; raw SQL is not used
+- **Secrets in environment variables** — no credentials are hardcoded; `.env` is excluded from version control
+
+---
+
+## Testing
+
+```bash
+# Run all tests
+npm test
+
+# Unit tests only (with coverage)
+npm run test:unit
+
+# Integration tests only
+npm run test:integration
+
+# Full coverage report
+npm run test:coverage
+```
+
+**Test coverage:**
+
+| Suite | What it covers |
+|-------|---------------|
+| `tests/unit/workflow.test.ts` | State machine — all valid and invalid transitions |
+| `tests/unit/auth.test.ts` | `protect` middleware and `requireRole` |
+| `tests/unit/application.test.ts` | Applicant controller endpoints |
+| `tests/unit/responseHelper.test.ts` | Response formatting utility |
+| `tests/integration/health.test.ts` | Health endpoint smoke test |
+
+---
+
+## Deployment
+
+| Layer | Platform |
+|-------|----------|
+| Frontend | Vercel |
+| Backend API | Render |
+| Database | Prisma Postgres (managed) |
+
+The production Docker image uses a multi-stage build — TypeScript is compiled in the build stage and only the compiled output and production `node_modules` are copied to the final image, keeping the image size small.
 
 ---
 
