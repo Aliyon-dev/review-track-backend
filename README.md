@@ -99,6 +99,8 @@ Interactive API docs (Scalar) are at `http://localhost:8000/api/docs`.
 | `PORT` | No | `3000` | Port the server listens on |
 | `API_URL` | No | `http://localhost:<PORT>` | Base URL shown in the API docs |
 | `NODE_ENV` | No | `development` | `development` or `production` |
+| `RESEND_API_KEY` | No | — | Resend API key. Email notifications are skipped when not set. |
+| `FROM_EMAIL` | No | `notifications@yourdomain.com` | Sender address (must be a verified Resend domain in prod) |
 
 **Local DATABASE_URL:**
 ```
@@ -213,6 +215,8 @@ CHANGES_REQUESTED ◄────────── UNDER_REVIEW ──► APPRO
 
 **No pagination** — `GET /api/applications` returns all records. Acceptable for a small dataset; needs cursor or offset pagination before scaling.
 
+**422 over 403 for invalid state transitions** — the requirements spec suggested 403 (Forbidden) when a transition is not permitted (e.g. `DRAFT → APPROVED`). 422 (Unprocessable Entity) is more accurate: the request is authenticated and authorized — the problem is that the business logic cannot honour it. 403 implies a permission failure, which would mislead clients into thinking they lack access rather than that the payload is semantically invalid.
+
 ---
 
 ## AI Usage
@@ -234,7 +238,6 @@ All generated code was reviewed and the architectural decisions (state machine d
 - **Pagination** on list endpoints (cursor-based)
 - **Token blacklist** for real server-side logout
 - **File attachments** on applications (S3/object storage)
-- **Email notifications** on status transitions
 - **Admin endpoints** — user management, bulk actions, reporting
 - **Rate limiting** on auth endpoints
 - **`type` and `priority` enums** once design values are finalised

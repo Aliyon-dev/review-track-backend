@@ -9,6 +9,7 @@ jest.mock('@/lib/prisma', () => ({
       create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
     auditLog: {
@@ -40,6 +41,7 @@ const draftApp = {
 const mockCreate = () => prisma.application.create as jest.Mock;
 const mockFindMany = () => prisma.application.findMany as jest.Mock;
 const mockFindUnique = () => prisma.application.findUnique as jest.Mock;
+const mockFindFirst = () => prisma.application.findFirst as jest.Mock;
 const mockUpdate = () => prisma.application.update as jest.Mock;
 
 beforeEach(() => {
@@ -133,14 +135,14 @@ describe('GET /api/applications/my', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(prisma.application.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { applicantId: 'user-1' } }),
+      expect.objectContaining({ where: expect.objectContaining({ applicantId: 'user-1' }) }),
     );
   });
 });
 
 describe('GET /api/applications/:id', () => {
   it('returns 403 for APPLICANT accessing another user\'s application', async () => {
-    mockFindUnique().mockResolvedValue({ ...draftApp, applicantId: 'other-user' });
+    mockFindFirst().mockResolvedValue({ ...draftApp, applicantId: 'other-user' });
     const res = await request(app)
       .get('/api/applications/app-1')
       .set('Authorization', token(Role.APPLICANT, 'user-1'));
@@ -148,7 +150,7 @@ describe('GET /api/applications/:id', () => {
   });
 
   it('returns 404 when not found', async () => {
-    mockFindUnique().mockResolvedValue(null);
+    mockFindFirst().mockResolvedValue(null);
     const res = await request(app)
       .get('/api/applications/missing')
       .set('Authorization', token(Role.REVIEWER));
@@ -156,7 +158,7 @@ describe('GET /api/applications/:id', () => {
   });
 
   it('returns application for REVIEWER', async () => {
-    mockFindUnique().mockResolvedValue(draftApp);
+    mockFindFirst().mockResolvedValue(draftApp);
     const res = await request(app)
       .get('/api/applications/app-1')
       .set('Authorization', token(Role.REVIEWER));
@@ -175,7 +177,7 @@ describe('PATCH /api/applications/:id/status', () => {
   });
 
   it('returns 404 when not found', async () => {
-    mockFindUnique().mockResolvedValue(null);
+    mockFindFirst().mockResolvedValue(null);
     const res = await request(app)
       .patch('/api/applications/missing/status')
       .set('Authorization', token(Role.REVIEWER))
@@ -184,7 +186,7 @@ describe('PATCH /api/applications/:id/status', () => {
   });
 
   it('returns 422 for an invalid transition', async () => {
-    mockFindUnique().mockResolvedValue(draftApp); // DRAFT
+    mockFindFirst().mockResolvedValue(draftApp); // DRAFT
     const res = await request(app)
       .patch('/api/applications/app-1/status')
       .set('Authorization', token(Role.REVIEWER))
@@ -194,7 +196,7 @@ describe('PATCH /api/applications/:id/status', () => {
 
   it('updates status for a valid transition', async () => {
     const submitted = { ...draftApp, status: ApplicationStatus.SUBMITTED };
-    mockFindUnique().mockResolvedValue(draftApp); // DRAFT
+    mockFindFirst().mockResolvedValue(draftApp); // DRAFT
     mockUpdate().mockResolvedValue(submitted);
     const res = await request(app)
       .patch('/api/applications/app-1/status')

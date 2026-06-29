@@ -8,7 +8,7 @@ const transitions: Record<ApplicationStatus, ApplicationStatus[]> = {
     ApplicationStatus.CHANGES_REQUESTED,
   ],
 
-  [ApplicationStatus.CHANGES_REQUESTED]: [ApplicationStatus.DRAFT],
+  [ApplicationStatus.CHANGES_REQUESTED]: [ApplicationStatus.DRAFT, ApplicationStatus.SUBMITTED],
 
   [ApplicationStatus.UNDER_REVIEW]: [
     ApplicationStatus.APPROVED,
