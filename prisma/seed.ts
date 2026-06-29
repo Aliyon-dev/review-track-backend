@@ -15,7 +15,7 @@ const SEED_USERS = [
   {
     firstName: 'Alice',
     lastName: 'Applicant',
-    email: 'temboaliyon@gmail.com',
+    email: 'applicant@example.com',
     password: 'password123',
     role: 'APPLICANT' as const,
   },

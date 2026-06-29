@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import env from '@/config/env';
 import prisma from '@/lib/prisma';
 import { ApplicationStatus } from '@/models/models';
+import { buildStatusEmail } from '@/utils/emailTemplates';
 
 const SUBJECTS: Partial<Record<ApplicationStatus, string>> = {
   [ApplicationStatus.UNDER_REVIEW]: 'Your application is under review',
@@ -34,10 +35,13 @@ export const notifyStatusChange = async (
   });
   if (!user) return;
 
+  const { html, text } = buildStatusEmail(user.firstName, applicationTitle, toStatus);
+
   await transporter.sendMail({
     from: env.fromEmail,
     to: user.email,
     subject,
-    text: `Hi ${user.firstName},\n\nYour application "${applicationTitle}" status has changed to: ${toStatus}.\n\nLog in to view the details.\n\nReview Track`,
+    html,
+    text,
   });
 };
