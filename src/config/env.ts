@@ -7,7 +7,10 @@ const env = {
   dbUrl: process.env.DATABASE_URL || '',
   jwtSecret: process.env.JWT_SECRET || 'changeme',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  resendApiKey: process.env.RESEND_API_KEY || '',
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: Number(process.env.SMTP_PORT) || 587,
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
   fromEmail: process.env.FROM_EMAIL || 'notifications@yourdomain.com',
 } as const;
 

@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import env from '@/config/env';
 import prisma from '@/lib/prisma';
 import { ApplicationStatus } from '@/models/models';
@@ -10,13 +10,23 @@ const SUBJECTS: Partial<Record<ApplicationStatus, string>> = {
   [ApplicationStatus.CHANGES_REQUESTED]: 'Changes requested on your application',
 };
 
+const transporter = nodemailer.createTransport({
+  host: env.smtpHost,
+  port: env.smtpPort,
+  secure: env.smtpPort === 465,
+  auth: {
+    user: env.smtpUser,
+    pass: env.smtpPass,
+  },
+});
+
 export const notifyStatusChange = async (
   applicantId: string,
   applicationTitle: string,
   toStatus: ApplicationStatus,
 ): Promise<void> => {
   const subject = SUBJECTS[toStatus];
-  if (!subject || !env.resendApiKey) return;
+  if (!subject || !env.smtpUser) return;
 
   const user = await prisma.user.findUnique({
     where: { id: applicantId },
@@ -24,8 +34,7 @@ export const notifyStatusChange = async (
   });
   if (!user) return;
 
-  const resend = new Resend(env.resendApiKey);
-  await resend.emails.send({
+  await transporter.sendMail({
     from: env.fromEmail,
     to: user.email,
     subject,
